@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::RwLock};
 
 use anyhow::{Ok, Result, anyhow};
 use endpoint_sec::{Client, ExpectedResponseType, Message};
@@ -11,7 +11,7 @@ fn make_bit_map() -> Result<RoaringBitmap> {
     let sys = System::new_with_specifics(
         RefreshKind::nothing().with_processes(ProcessRefreshKind::nothing()),
     );
-    // sys.refresh_processes(ProcessesToUpdate::All, true);
+
     let mut process_tree = HashMap::<Pid, Vec<Pid>>::new();
     for (_pid, process) in sys.processes().iter() {
         let pid = process.pid();
@@ -93,39 +93,35 @@ fn make_bit_map() -> Result<RoaringBitmap> {
 }
 
 fn default_allow_event(client: &mut Client<'_>, msg: &Message) -> Result<()> {
-    if let Some(action) = msg.action() {
-        if let endpoint_sec::Action::Auth(event_id) = action {
-            if let Some(event) = msg.event() {
-                match event.expected_response_type() {
-                    Some(resp_type) => match resp_type {
-                        ExpectedResponseType::Auth => {
-                            client
-                                .respond_auth_result(
-                                    &msg,
-                                    es_auth_result_t::ES_AUTH_RESULT_ALLOW,
-                                    true,
-                                )
-                                .map_err(|err| {
-                                    anyhow!("respond auth event 0x{:02X} failed: {}", event_id, err)
-                                })?;
-                        }
-                        ExpectedResponseType::Flags { flags: _ } => {
-                            static FULL_ACCESS: u32 = u32::MAX;
-                            client
-                                .respond_flags_result(&msg, FULL_ACCESS, true)
-                                .map_err(|err| {
-                                    anyhow!(
-                                        "respond auth flags event 0x{:02X} failed: {}",
-                                        event_id,
-                                        err
-                                    )
-                                })?;
-                        }
-                    },
-                    None => log::warn!("auth event 0x{:02X} not response", event_id),
-                }
+    let (Some(action), Some(event)) = (msg.action(), msg.event()) else {
+        return Ok(());
+    };
+    let endpoint_sec::Action::Auth(event_id) = action else {
+        return Ok(());
+    };
+    match event.expected_response_type() {
+        Some(resp_type) => match resp_type {
+            ExpectedResponseType::Auth => {
+                client
+                    .respond_auth_result(&msg, es_auth_result_t::ES_AUTH_RESULT_ALLOW, true)
+                    .map_err(|err| {
+                        anyhow!("respond auth event 0x{:02X} failed: {}", event_id, err)
+                    })?;
             }
-        }
+            ExpectedResponseType::Flags { flags: _ } => {
+                static FULL_ACCESS: u32 = u32::MAX;
+                client
+                    .respond_flags_result(&msg, FULL_ACCESS, true)
+                    .map_err(|err| {
+                        anyhow!(
+                            "respond auth flags event 0x{:02X} failed: {}",
+                            event_id,
+                            err
+                        )
+                    })?;
+            }
+        },
+        None => log::warn!("auth event 0x{:02X} not response", event_id),
     }
 
     Ok(())
@@ -136,9 +132,13 @@ pub(super) fn get_handler_and_subscribe_events() -> Result<(
     &'static [es_event_type_t],
 )> {
     let bit_map = make_bit_map()?;
+    let bit_map_locker = RwLock::new(bit_map);
     let handler = move |client: &mut Client<'_>, msg: Message| {
         let mut execute = || -> Result<()> {
             let pid = msg.process().audit_token().pid();
+            let bit_map = bit_map_locker
+                .read()
+                .map_err(|err| anyhow!("get bit map locker failed: {}", err))?;
             if let Some(event) = msg.event() {
                 if bit_map.contains(pid as u32) {
                     match event {
@@ -155,7 +155,22 @@ pub(super) fn get_handler_and_subscribe_events() -> Result<(
                         endpoint_sec::Event::AuthMmap(_event_mmap) => {}
                         endpoint_sec::Event::AuthRename(_event_rename) => {}
                         endpoint_sec::Event::AuthUnlink(_event_unlink) => {}
-                        endpoint_sec::Event::NotifyFork(_event_fork) => {}
+                        endpoint_sec::Event::NotifyFork(event_fork) => {
+                            let child = event_fork.child();
+                            drop(bit_map);
+                            let mut bit_map = bit_map_locker.write().map_err(|err| {
+                                anyhow!("get bit map write locker in fork event failed: {}", err)
+                            })?;
+                            let pid = child.audit_token().pid();
+                            bit_map.insert(pid as u32);
+                        }
+                        endpoint_sec::Event::NotifyExit(_event_exit) => {
+                            drop(bit_map);
+                            let mut bit_map = bit_map_locker.write().map_err(|err| {
+                                anyhow!("get bit map write locker in exit event failed: {}", err)
+                            })?;
+                            bit_map.remove(pid as u32);
+                        }
                         _other => {}
                     }
                 }
@@ -174,6 +189,7 @@ pub(super) fn get_handler_and_subscribe_events() -> Result<(
         es_event_type_t::ES_EVENT_TYPE_AUTH_RENAME,
         es_event_type_t::ES_EVENT_TYPE_AUTH_UNLINK,
         es_event_type_t::ES_EVENT_TYPE_NOTIFY_FORK,
+        es_event_type_t::ES_EVENT_TYPE_NOTIFY_EXIT,
     ];
     Ok((handler, SUBSCRIBE_EVENTS))
 }
