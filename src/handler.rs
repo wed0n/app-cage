@@ -1,8 +1,9 @@
-use std::{collections::HashMap, sync::RwLock};
+use std::{collections::HashMap, env, sync::RwLock};
 
 use anyhow::{Ok, Result, anyhow};
 use endpoint_sec::{Client, ExpectedResponseType, Message};
 use endpoint_sec_sys::{es_auth_result_t, es_event_type_t};
+use globset::{Glob, GlobSetBuilder};
 use log;
 use roaring::RoaringBitmap;
 use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System};
@@ -131,8 +132,25 @@ pub(super) fn get_handler_and_subscribe_events() -> Result<(
     impl Fn(&mut Client<'_>, Message),
     &'static [es_event_type_t],
 )> {
+    static FREAD: i32 = 0x00000001;
+    static FWRITE: i32 = 0x00000002;
+    static FNONBLOCK: i32 = 0x00000004;
+    static FAPPEND: i32 = 0x00000008;
+    static FASYNC: i32 = 0x00000040;
+    static FFSYNC: i32 = 0x00000080;
+    static FFDSYNC: i32 = 0x00400000;
+    static FEXEC: i32 = 0x04000000;
+
     let bit_map = make_bit_map()?;
     let bit_map_locker = RwLock::new(bit_map);
+    let mut builder = GlobSetBuilder::new();
+    let mut cwd = env::current_dir()?;
+    cwd.push("*.txt");
+    let cwd = cwd.to_str().ok_or(anyhow!("add cwd to glob set failed"))?;
+    builder.add(Glob::new(cwd)?);
+    log::debug!("add cwd {} to glob set", cwd);
+    let set = builder.build()?;
+
     let handler = move |client: &mut Client<'_>, msg: Message| {
         let mut execute = || -> Result<()> {
             let pid = msg.process().audit_token().pid();
@@ -143,11 +161,18 @@ pub(super) fn get_handler_and_subscribe_events() -> Result<(
                 if bit_map.contains(pid as u32) {
                     match event {
                         endpoint_sec::Event::AuthOpen(event_open) => {
-                            log::debug!(
-                                "open file {} as mode {}",
-                                event_open.file().path().to_string_lossy(),
-                                event_open.fflag()
-                            );
+                            let path = event_open
+                                .file()
+                                .path()
+                                .to_str()
+                                .ok_or(anyhow!("bad path"))?;
+                            let fflag = event_open.fflag();
+                            if set.is_match(path) {
+                                // if fflag & FWRITE != 0 {
+                                log::debug!("open file {} as mode 0x{:02X}", path, fflag);
+                                // }
+                            }
+
                             // client
                             //     .respond_auth_result(&msg, es_auth_result_t::ES_AUTH_RESULT_ALLOW, true)
                             //     .map_err(|err| anyhow!("respond"))?;
