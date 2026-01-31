@@ -1,15 +1,15 @@
 mod event_handler;
 
-use std::{env, sync::RwLock};
+use std::sync::RwLock;
 
 use anyhow::{Ok, Result, anyhow};
 use endpoint_sec::{Client, ExpectedResponseType, Message};
 use endpoint_sec_sys::{es_auth_result_t, es_event_type_t};
-use globset::{Glob, GlobSetBuilder};
 use log;
 
-use crate::bitmap::make_bit_map;
+use crate::bitmap::make_bitmap;
 use crate::config::Config;
+use crate::globset::make_globset;
 use crate::handler::event_handler::{
     handle_auth_mmap, handle_auth_open, handle_auth_rename, handle_auth_unlink, handle_notify_exit,
     handle_notify_fork,
@@ -56,18 +56,9 @@ pub(super) fn get_handler_and_subscribe_events(
     impl Fn(&mut Client<'_>, Message),
     &'static [es_event_type_t],
 )> {
-    let bit_map = make_bit_map()?;
+    let bit_map = make_bitmap()?;
     let bit_map_locker = RwLock::new(bit_map);
-    let mut builder = GlobSetBuilder::new();
-    let mut cwd = env::current_dir()?;
-    cwd.push("**");
-    let cwd = cwd.to_str().ok_or(anyhow!("add cwd to glob set failed"))?;
-    builder.add(Glob::new(cwd)?);
-    log::debug!("add cwd {} to glob set", cwd);
-    for allow_path in config.whitelist.iter() {
-        builder.add(Glob::new(allow_path)?);
-    }
-    let set = builder.build()?;
+    let set = make_globset(&config)?;
 
     let handler = move |client: &mut Client<'_>, msg: Message| {
         let mut execute = || -> Result<()> {

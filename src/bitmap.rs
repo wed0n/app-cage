@@ -5,7 +5,7 @@ use log;
 use roaring::RoaringBitmap;
 use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System};
 
-pub(super) fn make_bit_map() -> Result<RoaringBitmap> {
+pub(super) fn make_bitmap() -> Result<RoaringBitmap> {
     let sys = System::new_with_specifics(
         RefreshKind::nothing().with_processes(ProcessRefreshKind::nothing()),
     );
