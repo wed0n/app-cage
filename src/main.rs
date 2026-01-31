@@ -1,3 +1,5 @@
+mod bitmap;
+mod config;
 mod handler;
 
 use std::env;
@@ -17,8 +19,9 @@ fn main() -> Result<()> {
     log_builder.init();
     log::info!("logger init with level {}", log::max_level());
 
+    let config = config::get_config();
     endpoint_sec::version::set_runtime_version(10, 15, 0);
-    let (handle, subscribe_events) = get_handler_and_subscribe_events()?;
+    let (handle, subscribe_events) = get_handler_and_subscribe_events(&config)?;
     let mut client = Client::new(handle).map_err(|err| anyhow!("connect failed: {}", err))?;
 
     client

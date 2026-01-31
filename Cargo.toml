@@ -19,3 +19,5 @@ endpoint-sec = "0.4.3"
 endpoint-sec-sys = "0.4.3"
 sysinfo = "0.38"
 globset = "0.4"
+serde = { version = "1", features = ["derive"] }
+toml = "0.9"
