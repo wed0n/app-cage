@@ -1,3 +1,5 @@
+mod event_handler;
+
 use std::{env, sync::RwLock};
 
 use anyhow::{Ok, Result, anyhow};
@@ -8,25 +10,10 @@ use log;
 
 use crate::bitmap::make_bit_map;
 use crate::config::Config;
-
-// static FREAD: i32 = 0x00000001;
-static FWRITE: i32 = 0x00000002;
-// static FNONBLOCK: i32 = 0x00000004;
-// static FAPPEND: i32 = 0x00000008;
-// static FASYNC: i32 = 0x00000040;
-// static FFSYNC: i32 = 0x00000080;
-// static FMARK: i32 = 0x00001000;
-// static FDEFER: i32 = 0x00002000;
-// static FWASLOCKED: i32 = 0x00004000;
-// static FWASWRITTEN: i32 = 0x00010000;
-// static FNOCACHE: i32 = 0x00040000;
-// static FNORDAHEAD: i32 = 0x00080000;
-// static FFDSYNC: i32 = 0x00400000;
-// static FNODIRECT: i32 = 0x00800000;
-// static FENCRYPTED: i32 = 0x02000000;
-// static FSINGLE_WRITER: i32 = 0x04000000;
-// static FUNENCRYPTED: i32 = 0x10000000;
-// static FEXEC: i32 = 0x40000000;
+use crate::handler::event_handler::{
+    handle_auth_mmap, handle_auth_open, handle_auth_rename, handle_auth_unlink, handle_notify_exit,
+    handle_notify_fork,
+};
 
 fn default_allow_event(client: &mut Client<'_>, msg: &Message) -> Result<()> {
     let (Some(action), Some(event)) = (msg.action(), msg.event()) else {
@@ -73,7 +60,7 @@ pub(super) fn get_handler_and_subscribe_events(
     let bit_map_locker = RwLock::new(bit_map);
     let mut builder = GlobSetBuilder::new();
     let mut cwd = env::current_dir()?;
-    cwd.push("*.txt");
+    cwd.push("**");
     let cwd = cwd.to_str().ok_or(anyhow!("add cwd to glob set failed"))?;
     builder.add(Glob::new(cwd)?);
     log::debug!("add cwd {} to glob set", cwd);
@@ -92,74 +79,32 @@ pub(super) fn get_handler_and_subscribe_events(
                 if bit_map.contains(pid as u32) {
                     match event {
                         endpoint_sec::Event::AuthOpen(event_open) => {
-                            let os_path = event_open.file().path();
-                            let path = os_path.to_str().ok_or(anyhow!(
-                                "bad path {} in auth event",
-                                os_path.to_string_lossy()
-                            ))?;
-                            let fflag = event_open.fflag();
-                            if set.is_match(path) && fflag & FWRITE != 0 {
-                                if config.enforcing {
-                                    client
-                                        .respond_flags_result(&msg, !FWRITE as u32, true)
-                                        .map_err(|err| {
-                                            anyhow!("respond open file event failed: {}", err)
-                                        })?;
-                                    return Ok(());
-                                } else {
-                                    log::warn!(
-                                        "open unexpected file {} as mode 0x{:02X}",
-                                        path,
-                                        fflag
-                                    );
-                                }
+                            if handle_auth_open(config, &set, client, &msg, event_open)? {
+                                return Ok(());
                             }
                         }
                         endpoint_sec::Event::AuthMmap(event_mmap) => {
-                            let os_path = event_mmap.source().path();
-                            let path = os_path.to_str().ok_or(anyhow!(
-                                "bad path {} in mmap event",
-                                os_path.to_string_lossy()
-                            ))?;
-                            if set.is_match(path) {
-                                log::debug!("mmap {}", path);
+                            if handle_auth_mmap(config, &set, client, &msg, event_mmap)? {
+                                return Ok(());
                             }
                         }
                         endpoint_sec::Event::AuthRename(event_rename) => {
-                            let os_path = event_rename.source().path();
-                            let path = os_path.to_str().ok_or(anyhow!(
-                                "bad path {} in rename event",
-                                os_path.to_string_lossy()
-                            ))?;
-                            if set.is_match(path) {
-                                log::debug!("rename {}", path);
+                            if handle_auth_rename(config, &set, client, &msg, event_rename)? {
+                                return Ok(());
                             }
                         }
                         endpoint_sec::Event::AuthUnlink(event_unlink) => {
-                            let os_path = event_unlink.target().path();
-                            let path = os_path.to_str().ok_or(anyhow!(
-                                "bad path {} in unlink event",
-                                os_path.to_string_lossy()
-                            ))?;
-                            if set.is_match(path) {
-                                log::debug!("unlink {}", path);
+                            if handle_auth_unlink(config, &set, client, &msg, event_unlink)? {
+                                return Ok(());
                             }
                         }
                         endpoint_sec::Event::NotifyFork(event_fork) => {
-                            let child = event_fork.child();
                             drop(bit_map);
-                            let mut bit_map = bit_map_locker.write().map_err(|err| {
-                                anyhow!("get bit map write locker in fork event failed: {}", err)
-                            })?;
-                            let pid = child.audit_token().pid();
-                            bit_map.insert(pid as u32);
+                            handle_notify_fork(&bit_map_locker, event_fork)?;
                         }
                         endpoint_sec::Event::NotifyExit(_event_exit) => {
                             drop(bit_map);
-                            let mut bit_map = bit_map_locker.write().map_err(|err| {
-                                anyhow!("get bit map write locker in exit event failed: {}", err)
-                            })?;
-                            bit_map.remove(pid as u32);
+                            handle_notify_exit(&bit_map_locker, pid)?;
                         }
                         _other => {}
                     }
