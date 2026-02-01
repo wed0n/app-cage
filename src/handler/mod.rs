@@ -11,7 +11,7 @@ use crate::bitmap::make_bitmap;
 use crate::config::Config;
 use crate::globset::make_globset;
 use crate::handler::event_handler::{
-    handle_auth_mmap, handle_auth_open, handle_auth_rename, handle_auth_unlink, handle_notify_exit,
+    handle_auth_open, handle_auth_rename, handle_auth_unlink, handle_notify_exit,
     handle_notify_fork,
 };
 
@@ -74,11 +74,7 @@ pub(super) fn get_handler_and_subscribe_events(
                                 return Ok(());
                             }
                         }
-                        endpoint_sec::Event::AuthMmap(event_mmap) => {
-                            if handle_auth_mmap(config, &set, client, &msg, event_mmap)? {
-                                return Ok(());
-                            }
-                        }
+
                         endpoint_sec::Event::AuthRename(event_rename) => {
                             if handle_auth_rename(config, &set, client, &msg, event_rename)? {
                                 return Ok(());
@@ -111,7 +107,6 @@ pub(super) fn get_handler_and_subscribe_events(
     };
     static SUBSCRIBE_EVENTS: &[es_event_type_t] = &[
         es_event_type_t::ES_EVENT_TYPE_AUTH_OPEN,
-        es_event_type_t::ES_EVENT_TYPE_AUTH_MMAP,
         es_event_type_t::ES_EVENT_TYPE_AUTH_RENAME,
         es_event_type_t::ES_EVENT_TYPE_AUTH_UNLINK,
         es_event_type_t::ES_EVENT_TYPE_NOTIFY_FORK,

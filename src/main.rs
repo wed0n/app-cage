@@ -21,6 +21,7 @@ fn main() -> Result<()> {
     log::info!("logger init with level {}", log::max_level());
 
     let config = config::get_config();
+    log::info!("enforcing mode is {}", config.enforcing);
     endpoint_sec::version::set_runtime_version(10, 15, 0);
     let (handler, subscribe_events) = get_handler_and_subscribe_events(&config)?;
     let mut client = Client::new(handler).map_err(|err| anyhow!("connect failed: {}", err))?;

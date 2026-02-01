@@ -2,6 +2,7 @@ use std::{
     env,
     fs::File,
     io::{Read, Write},
+    process::Command,
 };
 
 use anyhow::{Result, anyhow};
@@ -40,6 +41,12 @@ pub(super) fn get_config() -> Config {
                     let config_str = toml::to_string(&config)?;
                     let mut file = File::create(&config_path)?;
                     file.write(config_str.as_bytes())?;
+                    let uid = env::var("SUDO_UID")?;
+                    let gid = env::var("SUDO_GID")?;
+                    let _ = Command::new("chown")
+                        .arg(format!("{}:{}", uid, gid))
+                        .arg(config_path)
+                        .output()?;
 
                     return Ok(config);
                 }

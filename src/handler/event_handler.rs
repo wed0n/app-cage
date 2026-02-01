@@ -2,8 +2,7 @@ use std::{ffi::OsStr, path::PathBuf, sync::RwLock};
 
 use anyhow::{Ok, Result, anyhow};
 use endpoint_sec::{
-    Client, EventFork, EventMmap, EventOpen, EventRename, EventRenameDestinationFile, EventUnlink,
-    Message,
+    Client, EventFork, EventOpen, EventRename, EventRenameDestinationFile, EventUnlink, Message,
 };
 use endpoint_sec_sys::es_auth_result_t;
 use globset::GlobSet;
@@ -30,17 +29,6 @@ static FWRITE: i32 = 0x00000002;
 // static FUNENCRYPTED: i32 = 0x10000000;
 // static FEXEC: i32 = 0x40000000;
 
-static MAP_SHARED: i32 = 0x0001;
-// static MAP_PRIVATE: i32 = 0x0002;
-// static MAP_FIXED: i32 = 0x0010;
-// static MAP_RENAME: i32 = 0x0020;
-// static MAP_NORESERVE: i32 = 0x0040;
-// static MAP_RESERVED0080: i32 = 0x0080;
-// static MAP_NOEXTEND: i32 = 0x0100;
-// static MAP_HASSEMAPHORE: i32 = 0x0200;
-// static MAP_NOCACHE: i32 = 0x0400;
-// static MAP_JIT: i32 = 0x0800;
-
 fn os_path_convert(os_path: &OsStr) -> Result<&str> {
     os_path
         .to_str()
@@ -57,7 +45,7 @@ pub(super) fn handle_auth_open(
     let mut is_responded = false;
     let path = os_path_convert(event_open.file().path())?;
     let fflag = event_open.fflag();
-    if !set.is_match(path) && fflag & FWRITE != 0 {
+    if !set.is_match(path) && (fflag & FWRITE) != 0 {
         let pid = msg.process().audit_token().pid();
         if config.enforcing {
             client
@@ -71,37 +59,6 @@ pub(super) fn handle_auth_open(
                 pid,
                 path,
                 fflag
-            );
-        }
-    }
-
-    Ok(is_responded)
-}
-
-pub(super) fn handle_auth_mmap(
-    config: &Config,
-    set: &GlobSet,
-    client: &mut Client,
-    msg: &Message,
-    event_mmap: EventMmap,
-) -> Result<bool> {
-    let mut is_responded = false;
-    let path = os_path_convert(event_mmap.source().path())?;
-    let flag = event_mmap.flags();
-    if (flag & MAP_SHARED) != 0 && !set.is_match(path) {
-        let pid = msg.process().audit_token().pid();
-        if config.enforcing {
-            client
-                .respond_auth_result(&msg, es_auth_result_t::ES_AUTH_RESULT_DENY, true)
-                .map_err(|err| anyhow!("respond mmap event failed: {}", err))?;
-            log::info!("reject pid {} mmap {} as flag 0x{:02X}", pid, path, flag);
-            is_responded = true;
-        } else {
-            log::warn!(
-                "pid {} mmap unexpected file {} as flag 0x{:02X}",
-                pid,
-                path,
-                flag
             );
         }
     }
