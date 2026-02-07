@@ -28,13 +28,15 @@ pub(super) fn handle_auth_open(
     let mut is_responded = false;
     let path = os_path_convert(event_open.file().path())?;
     let fflag = event_open.fflag();
-    if !set.is_match(path) && (fflag & FWRITE) != 0 {
+    if !set.is_match(path) {
         let pid = msg.process().audit_token().pid();
         if config.enforcing {
+            if fflag & FWRITE != 0 {
+                log::info!("reject pid {} open {} as mode 0x{:02X}", pid, path, fflag);
+            }
             client
-                .respond_flags_result(&msg, !FWRITE as u32, true)
+                .respond_flags_result(&msg, !FWRITE as u32, false)
                 .map_err(|err| anyhow!("respond open event failed: {}", err))?;
-            log::info!("reject pid {} open {} as mode 0x{:02X}", pid, path, fflag);
             is_responded = true;
         } else {
             log::warn!(

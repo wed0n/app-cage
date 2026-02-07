@@ -64,6 +64,7 @@ pub(super) fn get_handler_and_subscribe_events(
 
     let handler = move |client: &mut Client<'_>, msg: Message| {
         let mut execute = || -> Result<()> {
+            let mut is_responded = false;
             let pid = msg.process().audit_token().pid();
             let bit_map = bit_map_locker
                 .read()
@@ -72,24 +73,19 @@ pub(super) fn get_handler_and_subscribe_events(
                 if bit_map.contains(pid as u32) {
                     match event {
                         endpoint_sec::Event::AuthOpen(event_open) => {
-                            if handle_auth_open(config, &set, client, &msg, event_open)? {
-                                return Ok(());
-                            }
+                            is_responded = handle_auth_open(config, &set, client, &msg, event_open)?
                         }
                         endpoint_sec::Event::AuthCreate(event_create) => {
-                            if handle_auth_create(config, &set, client, &msg, event_create)? {
-                                return Ok(());
-                            }
+                            is_responded =
+                                handle_auth_create(config, &set, client, &msg, event_create)?
                         }
                         endpoint_sec::Event::AuthRename(event_rename) => {
-                            if handle_auth_rename(config, &set, client, &msg, event_rename)? {
-                                return Ok(());
-                            }
+                            is_responded =
+                                handle_auth_rename(config, &set, client, &msg, event_rename)?
                         }
                         endpoint_sec::Event::AuthUnlink(event_unlink) => {
-                            if handle_auth_unlink(config, &set, client, &msg, event_unlink)? {
-                                return Ok(());
-                            }
+                            is_responded =
+                                handle_auth_unlink(config, &set, client, &msg, event_unlink)?
                         }
                         endpoint_sec::Event::NotifyFork(event_fork) => {
                             drop(bit_map);
@@ -103,7 +99,9 @@ pub(super) fn get_handler_and_subscribe_events(
                     }
                 }
             }
-            default_allow_event(client, &msg)?;
+            if !is_responded {
+                default_allow_event(client, &msg)?;
+            }
 
             Ok(())
         };
