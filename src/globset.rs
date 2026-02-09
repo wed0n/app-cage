@@ -42,7 +42,10 @@ pub(super) fn make_globset(config: &Config) -> Result<GlobSet> {
         "/dev/dtracehelper",
         "/dev/ptmx",
         "/dev/tty*",
+        "/private/var/run/utmpx",
         "/private/var/tmp/**",
+        "/private/var/folders/_l/**",
+        "/private/var/spool/**"
     ];
     iter_slice(&mut builder, INNER_WHITELIST)?;
     iter_slice(&mut builder, config.whitelist.as_slice())?;
