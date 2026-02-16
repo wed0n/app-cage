@@ -6,11 +6,11 @@ use endpoint_sec::{
     EventRenameDestinationFile, EventUnlink, Message,
 };
 use endpoint_sec_sys::es_auth_result_t;
-use globset::GlobSet;
 use roaring::RoaringBitmap;
 
 use crate::config::Config;
 use crate::handler::flags::FWRITE;
+use crate::path_matcher::PathMatcher;
 
 fn os_path_convert(os_path: &OsStr) -> Result<&str> {
     os_path
@@ -20,7 +20,7 @@ fn os_path_convert(os_path: &OsStr) -> Result<&str> {
 
 pub(super) fn handle_auth_open(
     config: &Config,
-    set: &GlobSet,
+    matcher: &PathMatcher,
     client: &mut Client,
     msg: &Message,
     event_open: EventOpen,
@@ -28,7 +28,7 @@ pub(super) fn handle_auth_open(
     let mut is_responded = false;
     let path = os_path_convert(event_open.file().path())?;
     let fflag = event_open.fflag();
-    if !set.is_match(path) {
+    if !matcher.is_match(path) {
         let pid = msg.process().audit_token().pid();
         if config.enforcing {
             if fflag & FWRITE != 0 {
@@ -53,7 +53,7 @@ pub(super) fn handle_auth_open(
 
 pub(super) fn handle_auth_create(
     config: &Config,
-    set: &GlobSet,
+    matcher: &PathMatcher,
     client: &mut Client,
     msg: &Message,
     event_create: EventCreate,
@@ -81,7 +81,7 @@ pub(super) fn handle_auth_create(
         }
     }
 
-    if !set.is_match(destination_path) {
+    if !matcher.is_match(destination_path) {
         let pid = msg.process().audit_token().pid();
         if config.enforcing {
             client
@@ -99,7 +99,7 @@ pub(super) fn handle_auth_create(
 
 pub(super) fn handle_auth_rename(
     config: &Config,
-    set: &GlobSet,
+    matcher: &PathMatcher,
     client: &mut Client,
     msg: &Message,
     event_rename: EventRename,
@@ -127,7 +127,7 @@ pub(super) fn handle_auth_rename(
         }
     }
 
-    if !(set.is_match(source_path) && set.is_match(destination_path)) {
+    if !(matcher.is_match(source_path) && matcher.is_match(destination_path)) {
         let pid = msg.process().audit_token().pid();
         if config.enforcing {
             client
@@ -154,7 +154,7 @@ pub(super) fn handle_auth_rename(
 
 pub(super) fn handle_auth_unlink(
     config: &Config,
-    set: &GlobSet,
+    matcher: &PathMatcher,
     client: &mut Client,
     msg: &Message,
     event_unlink: EventUnlink,
@@ -162,7 +162,7 @@ pub(super) fn handle_auth_unlink(
     let mut is_responded = false;
     let path = os_path_convert(event_unlink.target().path())?;
 
-    if !set.is_match(path) {
+    if !matcher.is_match(path) {
         let pid = msg.process().audit_token().pid();
         if config.enforcing {
             client

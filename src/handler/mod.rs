@@ -11,11 +11,11 @@ use log;
 
 use crate::bitmap::make_bitmap;
 use crate::config::Config;
-use crate::globset::make_globset;
 use crate::handler::event_handler::{
     handle_auth_create, handle_auth_open, handle_auth_rename, handle_auth_unlink,
     handle_notify_exit, handle_notify_fork,
 };
+use crate::path_matcher::PathMatcher;
 
 fn default_allow_event(client: &mut Client<'_>, msg: &Message) -> Result<()> {
     let (Some(action), Some(event)) = (msg.action(), msg.event()) else {
@@ -60,7 +60,7 @@ pub(super) fn get_handler_and_subscribe_events(
 )> {
     let bit_map = make_bitmap()?;
     let bit_map_locker = RwLock::new(bit_map);
-    let set = make_globset(&config)?;
+    let matcher = PathMatcher::new(&config)?;
 
     let handler = move |client: &mut Client<'_>, msg: Message| {
         let mut execute = || -> Result<()> {
@@ -73,19 +73,20 @@ pub(super) fn get_handler_and_subscribe_events(
                 if bit_map.contains(pid as u32) {
                     match event {
                         endpoint_sec::Event::AuthOpen(event_open) => {
-                            is_responded = handle_auth_open(config, &set, client, &msg, event_open)?
+                            is_responded =
+                                handle_auth_open(config, &matcher, client, &msg, event_open)?
                         }
                         endpoint_sec::Event::AuthCreate(event_create) => {
                             is_responded =
-                                handle_auth_create(config, &set, client, &msg, event_create)?
+                                handle_auth_create(config, &matcher, client, &msg, event_create)?
                         }
                         endpoint_sec::Event::AuthRename(event_rename) => {
                             is_responded =
-                                handle_auth_rename(config, &set, client, &msg, event_rename)?
+                                handle_auth_rename(config, &matcher, client, &msg, event_rename)?
                         }
                         endpoint_sec::Event::AuthUnlink(event_unlink) => {
                             is_responded =
-                                handle_auth_unlink(config, &set, client, &msg, event_unlink)?
+                                handle_auth_unlink(config, &matcher, client, &msg, event_unlink)?
                         }
                         endpoint_sec::Event::NotifyFork(event_fork) => {
                             drop(bit_map);

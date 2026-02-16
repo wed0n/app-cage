@@ -1,7 +1,7 @@
 mod bitmap;
 mod config;
-mod globset;
 mod handler;
+mod path_matcher;
 
 use std::env;
 
