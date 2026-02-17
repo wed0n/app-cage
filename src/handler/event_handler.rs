@@ -2,7 +2,7 @@ use std::{ffi::OsStr, path::PathBuf, sync::RwLock};
 
 use anyhow::{Ok, Result, anyhow};
 use endpoint_sec::{
-    Client, EventCreate, EventCreateDestinationFile, EventFork, EventOpen, EventRename,
+    Client, EventCreate, EventCreateDestinationFile, EventExec, EventFork, EventOpen, EventRename,
     EventRenameDestinationFile, EventUnlink, Message,
 };
 use endpoint_sec_sys::es_auth_result_t;
@@ -12,10 +12,10 @@ use crate::config::Config;
 use crate::handler::flags::FWRITE;
 use crate::path_matcher::PathMatcher;
 
-fn os_path_convert(os_path: &OsStr) -> Result<&str> {
-    os_path
+fn os_str_convert(os_str: &OsStr) -> Result<&str> {
+    os_str
         .to_str()
-        .ok_or(anyhow!("bad path {}", os_path.to_string_lossy()))
+        .ok_or(anyhow!("bad path {}", os_str.to_string_lossy()))
 }
 
 pub(super) fn handle_auth_open(
@@ -26,7 +26,7 @@ pub(super) fn handle_auth_open(
     event_open: EventOpen,
 ) -> Result<bool> {
     let mut is_responded = false;
-    let path = os_path_convert(event_open.file().path())?;
+    let path = os_str_convert(event_open.file().path())?;
     let fflag = event_open.fflag();
     if !matcher.is_match(path) {
         let pid = msg.process().audit_token().pid();
@@ -66,15 +66,15 @@ pub(super) fn handle_auth_create(
         .ok_or(anyhow!("create event destination is none"))?
     {
         EventCreateDestinationFile::ExistingFile(file) => {
-            destination_path = os_path_convert(file.path())?;
+            destination_path = os_str_convert(file.path())?;
         }
         EventCreateDestinationFile::NewPath {
             directory,
             filename,
             mode: _,
         } => {
-            new_path = PathBuf::from(os_path_convert(directory.path())?);
-            new_path.push(os_path_convert(filename)?);
+            new_path = PathBuf::from(os_str_convert(directory.path())?);
+            new_path.push(os_str_convert(filename)?);
             destination_path = new_path
                 .to_str()
                 .ok_or(anyhow!("bad new path {}", new_path.to_string_lossy()))?;
@@ -105,7 +105,7 @@ pub(super) fn handle_auth_rename(
     event_rename: EventRename,
 ) -> Result<bool> {
     let mut is_responded = false;
-    let source_path = os_path_convert(event_rename.source().path())?;
+    let source_path = os_str_convert(event_rename.source().path())?;
     let destination_path;
     let mut new_path;
     match event_rename
@@ -113,14 +113,14 @@ pub(super) fn handle_auth_rename(
         .ok_or(anyhow!("destination is none"))?
     {
         EventRenameDestinationFile::ExistingFile(file) => {
-            destination_path = os_path_convert(file.path())?;
+            destination_path = os_str_convert(file.path())?;
         }
         EventRenameDestinationFile::NewPath {
             directory,
             filename,
         } => {
-            new_path = PathBuf::from(os_path_convert(directory.path())?);
-            new_path.push(os_path_convert(filename)?);
+            new_path = PathBuf::from(os_str_convert(directory.path())?);
+            new_path.push(os_str_convert(filename)?);
             destination_path = new_path
                 .to_str()
                 .ok_or(anyhow!("bad new path {}", new_path.to_string_lossy()))?;
@@ -160,7 +160,7 @@ pub(super) fn handle_auth_unlink(
     event_unlink: EventUnlink,
 ) -> Result<bool> {
     let mut is_responded = false;
-    let path = os_path_convert(event_unlink.target().path())?;
+    let path = os_str_convert(event_unlink.target().path())?;
 
     if !matcher.is_match(path) {
         let pid = msg.process().audit_token().pid();
@@ -173,6 +173,41 @@ pub(super) fn handle_auth_unlink(
         } else {
             log::warn!("pid {} unlink unexpected file {}", pid, path);
         }
+    }
+
+    Ok(is_responded)
+}
+
+static GH_PROG: &str = "gh";
+pub(super) fn handle_auth_exec(
+    config: &Config,
+    matcher: &PathMatcher,
+    client: &mut Client,
+    msg: &Message,
+    event_exec: EventExec,
+) -> Result<bool> {
+    let mut is_responded = false;
+    if config.gh.enable {
+        let Some(path) = event_exec.dyld_exec_path() else {
+            return Ok(is_responded);
+        };
+        let path = os_str_convert(path)?;
+        let prog = path
+            .split("/")
+            .last()
+            .ok_or(anyhow!("bad command path {}", path))?;
+        if prog == GH_PROG {
+            let mut args = event_exec.args();
+            let (Some(command), Some(sub_command)) = (args.next(), args.next()) else {
+                return Ok(true);
+            };
+            let (command, sub_command) = (os_str_convert(command)?, os_str_convert(sub_command)?);
+            // for arg in {
+            //     let arg=os_str_convert(arg)?;
+            // }
+        }
+
+        log::debug!("current path is {}", path);
     }
 
     Ok(is_responded)

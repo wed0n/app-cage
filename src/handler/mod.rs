@@ -12,7 +12,7 @@ use log;
 use crate::bitmap::make_bitmap;
 use crate::config::Config;
 use crate::handler::event_handler::{
-    handle_auth_create, handle_auth_open, handle_auth_rename, handle_auth_unlink,
+    handle_auth_create, handle_auth_exec, handle_auth_open, handle_auth_rename, handle_auth_unlink,
     handle_notify_exit, handle_notify_fork,
 };
 use crate::path_matcher::PathMatcher;
@@ -74,19 +74,23 @@ pub(super) fn get_handler_and_subscribe_events(
                     match event {
                         endpoint_sec::Event::AuthOpen(event_open) => {
                             is_responded =
-                                handle_auth_open(config, &matcher, client, &msg, event_open)?
+                                handle_auth_open(config, &matcher, client, &msg, event_open)?;
                         }
                         endpoint_sec::Event::AuthCreate(event_create) => {
                             is_responded =
-                                handle_auth_create(config, &matcher, client, &msg, event_create)?
+                                handle_auth_create(config, &matcher, client, &msg, event_create)?;
                         }
                         endpoint_sec::Event::AuthRename(event_rename) => {
                             is_responded =
-                                handle_auth_rename(config, &matcher, client, &msg, event_rename)?
+                                handle_auth_rename(config, &matcher, client, &msg, event_rename)?;
                         }
                         endpoint_sec::Event::AuthUnlink(event_unlink) => {
                             is_responded =
-                                handle_auth_unlink(config, &matcher, client, &msg, event_unlink)?
+                                handle_auth_unlink(config, &matcher, client, &msg, event_unlink)?;
+                        }
+                        endpoint_sec::Event::AuthExec(event_exec) => {
+                            is_responded =
+                                handle_auth_exec(config, &matcher, client, &msg, event_exec)?;
                         }
                         endpoint_sec::Event::NotifyFork(event_fork) => {
                             drop(bit_map);
@@ -115,6 +119,7 @@ pub(super) fn get_handler_and_subscribe_events(
         es_event_type_t::ES_EVENT_TYPE_AUTH_CREATE,
         es_event_type_t::ES_EVENT_TYPE_AUTH_RENAME,
         es_event_type_t::ES_EVENT_TYPE_AUTH_UNLINK,
+        es_event_type_t::ES_EVENT_TYPE_AUTH_EXEC,
         es_event_type_t::ES_EVENT_TYPE_NOTIFY_FORK,
         es_event_type_t::ES_EVENT_TYPE_NOTIFY_EXIT,
     ];

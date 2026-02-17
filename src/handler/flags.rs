@@ -1,3 +1,4 @@
+// https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/fcntl.h
 pub(super) static FREAD: i32 = 0x00000001;
 pub(super) static FWRITE: i32 = 0x00000002;
 pub(super) static FNONBLOCK: i32 = 0x00000004;

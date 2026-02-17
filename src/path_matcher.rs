@@ -47,6 +47,10 @@ pub(crate) struct PathMatcher {
 impl PathMatcher {
     pub(crate) fn new(config: &Config) -> Result<PathMatcher> {
         let mut tree = PathTree::<()>::new();
+        let mut cwd = env::current_dir()?;
+        cwd.push("+");
+        let cwd = cwd.to_str().ok_or(anyhow!("add cwd to glob set failed"))?;
+        let _ = tree.insert(cwd, ());
         iter_slice(&mut tree, INNER_WHITELIST)?;
         iter_slice(&mut tree, config.whitelist.as_slice())?;
 
