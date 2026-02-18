@@ -89,8 +89,7 @@ pub(super) fn get_handler_and_subscribe_events(
                                 handle_auth_unlink(config, &matcher, client, &msg, event_unlink)?;
                         }
                         endpoint_sec::Event::AuthExec(event_exec) => {
-                            is_responded =
-                                handle_auth_exec(config, &matcher, client, &msg, event_exec)?;
+                            is_responded = handle_auth_exec(config, client, &msg, event_exec)?;
                         }
                         endpoint_sec::Event::NotifyFork(event_fork) => {
                             drop(bit_map);

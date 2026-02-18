@@ -20,7 +20,7 @@ fn main() -> Result<()> {
     log_builder.init();
     log::info!("logger init with level {}", log::max_level());
 
-    let config = Config::new();
+    let config = Config::new()?;
     log::info!("enforcing mode is {}", config.enforcing);
     endpoint_sec::version::set_runtime_version(13, 3, 0);
     let (handler, subscribe_events) = get_handler_and_subscribe_events(&config)?;

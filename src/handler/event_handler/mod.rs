@@ -1,8 +1,10 @@
+mod exec;
+
 use std::{ffi::OsStr, path::PathBuf, sync::RwLock};
 
 use anyhow::{Ok, Result, anyhow};
 use endpoint_sec::{
-    Client, EventCreate, EventCreateDestinationFile, EventExec, EventFork, EventOpen, EventRename,
+    Client, EventCreate, EventCreateDestinationFile, EventFork, EventOpen, EventRename,
     EventRenameDestinationFile, EventUnlink, Message,
 };
 use endpoint_sec_sys::es_auth_result_t;
@@ -11,6 +13,16 @@ use roaring::RoaringBitmap;
 use crate::config::Config;
 use crate::handler::flags::FWRITE;
 use crate::path_matcher::PathMatcher;
+
+pub(super) use self::exec::handle_auth_exec;
+
+
+#[derive(PartialEq, Debug)]
+enum ResponseType {
+    AlwaysAllow = 0,
+    Allow,
+    Deny,
+}
 
 fn os_str_convert(os_str: &OsStr) -> Result<&str> {
     os_str
@@ -173,41 +185,6 @@ pub(super) fn handle_auth_unlink(
         } else {
             log::warn!("pid {} unlink unexpected file {}", pid, path);
         }
-    }
-
-    Ok(is_responded)
-}
-
-static GH_PROG: &str = "gh";
-pub(super) fn handle_auth_exec(
-    config: &Config,
-    matcher: &PathMatcher,
-    client: &mut Client,
-    msg: &Message,
-    event_exec: EventExec,
-) -> Result<bool> {
-    let mut is_responded = false;
-    if config.gh.enable {
-        let Some(path) = event_exec.dyld_exec_path() else {
-            return Ok(is_responded);
-        };
-        let path = os_str_convert(path)?;
-        let prog = path
-            .split("/")
-            .last()
-            .ok_or(anyhow!("bad command path {}", path))?;
-        if prog == GH_PROG {
-            let mut args = event_exec.args();
-            let (Some(command), Some(sub_command)) = (args.next(), args.next()) else {
-                return Ok(true);
-            };
-            let (command, sub_command) = (os_str_convert(command)?, os_str_convert(sub_command)?);
-            // for arg in {
-            //     let arg=os_str_convert(arg)?;
-            // }
-        }
-
-        log::debug!("current path is {}", path);
     }
 
     Ok(is_responded)
