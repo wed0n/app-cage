@@ -3,6 +3,7 @@ use std::{
     env,
     fs::File,
     io::{Read, Write},
+    path::PathBuf,
     process::Command,
 };
 
@@ -12,6 +13,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Default, Deserialize, Serialize)]
 #[serde(default)]
 pub(crate) struct Config {
+    #[serde(skip)]
+    pub(crate) cwd: PathBuf,
     pub(crate) enforcing: bool,
     pub(crate) whitelist: Vec<String>,
     pub(crate) gh: GhConfig,
@@ -84,6 +87,9 @@ impl Config {
                 }
             }
         }
+
+        let cwd = env::current_dir()?;
+        config.cwd = cwd;
 
         if config.gh.enable {
             let pr = &mut config.gh.pr;
