@@ -28,7 +28,7 @@ fn default_allow_event(client: &mut Client<'_>, msg: &Message) -> Result<()> {
         Some(resp_type) => match resp_type {
             ExpectedResponseType::Auth => {
                 client
-                    .respond_auth_result(&msg, es_auth_result_t::ES_AUTH_RESULT_ALLOW, true)
+                    .respond_auth_result(&msg, es_auth_result_t::ES_AUTH_RESULT_ALLOW, false)
                     .map_err(|err| {
                         anyhow!("respond auth event 0x{:02X} failed: {}", event_id, err)
                     })?;
@@ -36,7 +36,7 @@ fn default_allow_event(client: &mut Client<'_>, msg: &Message) -> Result<()> {
             ExpectedResponseType::Flags { flags: _ } => {
                 static FULL_ACCESS: u32 = u32::MAX;
                 client
-                    .respond_flags_result(&msg, FULL_ACCESS, true)
+                    .respond_flags_result(&msg, FULL_ACCESS, false)
                     .map_err(|err| {
                         anyhow!(
                             "respond auth flags event 0x{:02X} failed: {}",

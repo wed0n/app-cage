@@ -16,14 +16,6 @@ use crate::path_matcher::PathMatcher;
 
 pub(super) use self::exec::handle_auth_exec;
 
-
-#[derive(PartialEq, Debug)]
-enum ResponseType {
-    AlwaysAllow = 0,
-    Allow,
-    Deny,
-}
-
 fn os_str_convert(os_str: &OsStr) -> Result<&str> {
     os_str
         .to_str()

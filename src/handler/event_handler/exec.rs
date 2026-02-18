@@ -4,7 +4,7 @@ use anyhow::{Ok, Result, anyhow};
 use endpoint_sec::{Client, EventExec, Message};
 use endpoint_sec_sys::es_auth_result_t;
 
-use super::{ResponseType, os_str_convert};
+use super::os_str_convert;
 use crate::config::Config;
 
 mod prog {
@@ -26,7 +26,26 @@ pub(crate) fn handle_auth_exec(
     event_exec: EventExec,
 ) -> Result<bool> {
     let mut is_responded = false;
-    let mut response_type = ResponseType::AlwaysAllow;
+    let (should_reject, prog) = judge(&config, &event_exec)?;
+
+    if should_reject {
+        let pid = msg.process().audit_token().pid();
+        if config.enforcing {
+            client
+                .respond_auth_result(msg, es_auth_result_t::ES_AUTH_RESULT_DENY, false)
+                .map_err(|err| anyhow!("respond exec event failed: {}", err))?;
+            log::info!("reject pid {} execute command {}", pid, prog);
+            is_responded = true
+        } else {
+            log::warn!("pid {} execute unexpected command {}", pid, prog);
+        }
+    }
+
+    Ok(is_responded)
+}
+
+fn judge<'a>(config: &Config, event_exec: &'a EventExec) -> Result<(bool, &'a str)> {
+    let mut should_reject = false;
     let mut prog = "";
     'outer: loop {
         if !config.gh.enable {
@@ -44,7 +63,6 @@ pub(crate) fn handle_auth_exec(
 
         match prog {
             prog::GH => {
-                response_type = ResponseType::Allow;
                 let (Some(command), Some(sub_command)) = (args.next(), args.next()) else {
                     break;
                 };
@@ -52,15 +70,13 @@ pub(crate) fn handle_auth_exec(
                     (os_str_convert(command)?, os_str_convert(sub_command)?);
                 match command {
                     gh_command::PR => {
-                        if config.gh.pr.command_allow_set.contains(sub_command) {
-                            response_type = ResponseType::Allow;
-                        } else {
-                            response_type = ResponseType::Deny;
+                        if !config.gh.pr.command_allow_set.contains(sub_command) {
+                            should_reject = true;
                             break;
                         }
                     }
                     _other => {
-                        response_type = ResponseType::Deny;
+                        should_reject = true;
                         break;
                     }
                 }
@@ -71,7 +87,7 @@ pub(crate) fn handle_auth_exec(
                         .path(),
                 );
                 if !cwd.starts_with(&config.cwd) {
-                    response_type = ResponseType::Deny;
+                    should_reject = true;
                     break;
                 }
                 loop {
@@ -81,41 +97,14 @@ pub(crate) fn handle_auth_exec(
                     };
                     let arg = os_str_convert(arg)?;
                     if arg == gh_arg::REPO1 || arg == gh_arg::REPO2 {
-                        response_type = ResponseType::Deny;
+                        should_reject = true;
                         break 'outer;
                     }
                 }
             }
             _other => {}
         }
-
-        break;
     }
 
-    let should_response;
-    let mut es_response_type = es_auth_result_t::ES_AUTH_RESULT_DENY;
-    match response_type {
-        ResponseType::Allow => {
-            should_response = true;
-            es_response_type = es_auth_result_t::ES_AUTH_RESULT_ALLOW;
-        }
-        ResponseType::Deny => should_response = true,
-        ResponseType::AlwaysAllow => should_response = false,
-    }
-    if should_response {
-        let pid = msg.process().audit_token().pid();
-        if config.enforcing {
-            client
-                .respond_auth_result(msg, es_response_type, false)
-                .map_err(|err| anyhow!("respond exec event failed: {}", err))?;
-            if es_response_type == es_auth_result_t::ES_AUTH_RESULT_DENY {
-                log::info!("reject pid {} execute command {}", pid, prog);
-            }
-            is_responded = true
-        } else if es_response_type == es_auth_result_t::ES_AUTH_RESULT_DENY {
-            log::warn!("pid {} execute unexpected command {}", pid, prog);
-        }
-    }
-
-    Ok(is_responded)
+    Ok((should_reject, prog))
 }
