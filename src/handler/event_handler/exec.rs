@@ -10,9 +10,6 @@ use crate::config::Config;
 mod prog {
     pub(super) const GH: &str = "gh";
 }
-mod gh_command {
-    pub(super) const PR: &str = "pr";
-}
 
 mod gh_arg {
     pub(super) const REPO1: &str = "-R";
@@ -68,14 +65,14 @@ fn judge<'a>(config: &Config, event_exec: &'a EventExec) -> Result<(bool, &'a st
                 };
                 let (command, sub_command) =
                     (os_str_convert(command)?, os_str_convert(sub_command)?);
-                match command {
-                    gh_command::PR => {
-                        if !config.gh.pr.command_allow_set.contains(sub_command) {
+                match config.gh.command_allow_map.get(command) {
+                    Some(allow_set) => {
+                        if !allow_set.contains(sub_command) {
                             should_reject = true;
                             break;
                         }
                     }
-                    _other => {
+                    None => {
                         should_reject = true;
                         break;
                     }
@@ -104,6 +101,8 @@ fn judge<'a>(config: &Config, event_exec: &'a EventExec) -> Result<(bool, &'a st
             }
             _other => {}
         }
+
+        break;
     }
 
     Ok((should_reject, prog))
