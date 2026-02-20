@@ -18,6 +18,7 @@ static INNER_WHITELIST: &[&str] = &[
     "/private/var/run/utmpx",
     "/private/var/spool/+",
     "/private/var/tmp/+",
+    "/tmp/+",
 ];
 
 fn iter_slice<T: AsRef<str>>(tree: &mut PathTree<()>, slice: &[T]) -> Result<()> {
