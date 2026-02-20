@@ -3,11 +3,11 @@ mod exec;
 use std::{ffi::OsStr, path::PathBuf, sync::RwLock};
 
 use anyhow::{Ok, Result, anyhow};
+use endpoint_sec::sys::es_auth_result_t;
 use endpoint_sec::{
     Client, EventCreate, EventCreateDestinationFile, EventFork, EventOpen, EventRename,
     EventRenameDestinationFile, EventUnlink, Message,
 };
-use endpoint_sec_sys::es_auth_result_t;
 use roaring::RoaringBitmap;
 
 use crate::config::Config;

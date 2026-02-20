@@ -17,7 +17,6 @@ env_logger = "0.11"
 serde = { version = "1", features = ["derive"] }
 toml = "0.9"
 endpoint-sec = { version = "0.4.3", features = ["macos_13_3_0"] }
-endpoint-sec-sys = "0.4.3"
 roaring = "0.11"
 sysinfo = "0.38"
 path-tree = "0.8"

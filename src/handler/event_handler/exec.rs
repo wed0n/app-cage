@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 
 use anyhow::{Ok, Result, anyhow};
+use endpoint_sec::sys::es_auth_result_t;
 use endpoint_sec::{Client, EventExec, Message};
-use endpoint_sec_sys::es_auth_result_t;
 
 use super::os_str_convert;
 use crate::config::Config;

@@ -5,8 +5,8 @@ mod flags;
 use std::sync::RwLock;
 
 use anyhow::{Ok, Result, anyhow};
+use endpoint_sec::sys::{es_auth_result_t, es_event_type_t};
 use endpoint_sec::{Client, ExpectedResponseType, Message};
-use endpoint_sec_sys::{es_auth_result_t, es_event_type_t};
 use log;
 
 use crate::bitmap::make_bitmap;

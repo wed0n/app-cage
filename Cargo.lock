@@ -73,7 +73,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "endpoint-sec",
- "endpoint-sec-sys",
  "env_logger",
  "log",
  "path-tree",
