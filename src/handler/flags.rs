@@ -17,3 +17,5 @@ pub(super) static FENCRYPTED: i32 = 0x02000000;
 pub(super) static FSINGLE_WRITER: i32 = 0x04000000;
 pub(super) static FUNENCRYPTED: i32 = 0x10000000;
 pub(super) static FEXEC: i32 = 0x40000000;
+
+// https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/stat.h
